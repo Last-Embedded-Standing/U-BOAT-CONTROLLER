@@ -57,6 +57,10 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define LEVEL_UP_BUTTON_Pin GPIO_PIN_0
+#define LEVEL_UP_BUTTON_GPIO_Port GPIOC
+#define LEVEL_DOWN_BUTTON_Pin GPIO_PIN_3
+#define LEVEL_DOWN_BUTTON_GPIO_Port GPIOC
 
 /* USER CODE BEGIN Private defines */
 
