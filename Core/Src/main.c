@@ -21,7 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include <lcd.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,7 +50,8 @@ UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-
+uint32_t dma[2];
+UART_HandleTypeDef* bluetoothUart = &huart1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -61,7 +63,8 @@ static void MX_USART2_UART_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
-
+long map(long x, long in_min, long in_max, long out_min, long out_max);
+void I2C_Scanner(I2C_HandleTypeDef *hi2c);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -104,13 +107,59 @@ int main(void)
   MX_USART1_UART_Init();
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
+  char message[50];
 
+  I2C_Scanner(&hi2c1);
+
+  lcd_init(&hi2c1);
+  lcd_clear();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  HAL_ADC_Start_DMA(&hadc, dma, 2);
+	  int joystick_x = -(map(dma[0], 0, 4095, 0, 40) - 19);
+	  int joystick_y = map(dma[1], 0, 4095, 0, 40) - 20;
+	  char direction = 'F';
+	  char level = 'F';
+	  char lcd_first_line[17];
+	  char lcd_second_line[17];
+	  if (joystick_x > 10 || joystick_x < -10) {
+		  direction = joystick_x > 0? 'R' : 'L';
+	  } else {
+		  direction = 'F';
+	  }
+
+	  int level_up_button_state = HAL_GPIO_ReadPin(LEVEL_UP_BUTTON_GPIO_Port, LEVEL_UP_BUTTON_Pin);
+	  int level_down_button_state = HAL_GPIO_ReadPin(LEVEL_DOWN_BUTTON_GPIO_Port, LEVEL_DOWN_BUTTON_Pin);
+	  printf("%d,%d,\r\n", level_up_button_state, level_down_button_state);
+	  if (level_up_button_state == RESET && level_down_button_state == RESET) {
+	  } else if (level_up_button_state == RESET) {
+		  level = 'U';
+	  } else if (level_down_button_state == RESET) {
+		  level = 'D';
+	  } else {
+		  level = 'F';
+	  }
+
+	  printf("%d,%c,%c\r\n", joystick_y, direction, level);
+	  sprintf(message, "%d,%c,%c\r", joystick_y, direction, level);
+	  sprintf(lcd_first_line, "s:%02d, d:%c", joystick_y, direction);
+	  sprintf(lcd_second_line, "level:%c", level);
+
+
+	  lcd_clear();
+	  lcd_put_cursor(0, 0);
+	  lcd_send_string(lcd_first_line);
+	  lcd_put_cursor(1, 0);
+	  lcd_send_string(lcd_second_line);
+
+	  // 블루투스로 메시지 전달
+	  HAL_UART_Transmit(bluetoothUart, message, sizeof(message), 10);
+
+	  HAL_Delay(100);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -388,7 +437,23 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+int _write(int file, char* p, int len){
+	HAL_UART_Transmit(&huart2, (uint8_t*)p, len, 10);
+	return len;
+}
 
+long map(long x, long in_min, long in_max, long out_min, long out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+void I2C_Scanner(I2C_HandleTypeDef *hi2c) {
+	printf("Scanning I2C bus...\r\n");
+	for (uint8_t i = 1; i < 127; i++) {
+		if (HAL_I2C_IsDeviceReady(hi2c, i << 1, 1, 10) == HAL_OK) {
+			printf("Device found at 0x%02X\r\n", i);
+		}
+	}
+}
 /* USER CODE END 4 */
 
 /**
